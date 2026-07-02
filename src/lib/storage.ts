@@ -31,6 +31,7 @@ function enrichStock(stock: Partial<Stock>): Stock {
     ...stock,
     sector: stock.sector ?? fallback.sector ?? "Unclassified",
     industry: stock.industry ?? fallback.industry ?? "Unclassified",
+    priceUpdatedAt: stock.priceUpdatedAt ?? fallback.priceUpdatedAt ?? stock.lastUpdated ?? new Date().toISOString(),
     valuationSource: stock.valuationSource ?? fallback.valuationSource ?? "Morningstar",
     starRating: stock.starRating ?? fallback.starRating ?? 4,
     scores: { ...fallback.scores, ...stock.scores },

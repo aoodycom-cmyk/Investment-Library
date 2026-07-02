@@ -18,9 +18,11 @@ export const formatPercent = (value: number) =>
 
 export const riskRank = (risk: Risk) => ({ Low: 1, Medium: 2, High: 3 })[risk];
 
-export const formatDate = (date: string) =>
-  new Intl.DateTimeFormat("en-US", {
+export const formatDate = (date: string) => {
+  const parsedDate = date.includes("T") ? new Date(date) : new Date(`${date}T12:00:00`);
+  return new Intl.DateTimeFormat("en-US", {
     month: "short",
     day: "numeric",
     year: "numeric"
-  }).format(new Date(`${date}T12:00:00`));
+  }).format(parsedDate);
+};

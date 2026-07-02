@@ -9,6 +9,7 @@ import {
   LineChart,
   Pencil,
   Plus,
+  RefreshCw,
   Search,
   ShieldAlert,
   Sparkles,
@@ -16,7 +17,7 @@ import {
   Trash2,
   X
 } from "lucide-react";
-import { FormEvent, ReactNode, useEffect, useMemo, useState } from "react";
+import { FormEvent, ReactNode, useCallback, useEffect, useMemo, useState } from "react";
 import {
   formatCurrency,
   formatDate,
@@ -25,6 +26,7 @@ import {
   upsideToBullish
 } from "./lib/calculations";
 import { exportToCsv, exportToExcel, exportToPdf } from "./lib/exporters";
+import { fetchLatestMarketPrice } from "./lib/marketData";
 import { localStockRepository } from "./lib/storage";
 import { Conviction, Decision, Filters, Risk, Stock, ValuationSource } from "./types";
 
@@ -52,6 +54,7 @@ const emptyStock = (): Stock => ({
   industry: "",
   owned: false,
   lastPrice: 0,
+  priceUpdatedAt: new Date().toISOString(),
   morningstarFairValue: 0,
   valuationSource: "Morningstar",
   bearPrice: 0,
@@ -95,6 +98,8 @@ export function App() {
   const [stocks, setStocks] = useState<Stock[]>(() => localStockRepository.list());
   const [selectedId, setSelectedId] = useState(stocks[0]?.id ?? "");
   const [editingStock, setEditingStock] = useState<Stock | null>(null);
+  const [isRefreshingPrices, setIsRefreshingPrices] = useState(false);
+  const [priceRefreshMessage, setPriceRefreshMessage] = useState("Prices update automatically on open.");
   const [query, setQuery] = useState("");
   const [filters, setFilters] = useState<Filters>({
     owned: "All",
@@ -145,7 +150,7 @@ export function App() {
 
   const kpis = useMemo(() => {
     const bestUpside = maxBy(stocks, upsideToBullish);
-    const lastUpdated = maxBy(stocks, (stock) => new Date(stock.lastUpdated).getTime());
+    const lastPriceUpdated = maxBy(stocks, (stock) => new Date(stock.priceUpdatedAt).getTime());
     const averageMargin =
       stocks.length === 0
         ? 0
@@ -157,9 +162,78 @@ export function App() {
       { label: "Buy Candidates", value: stocks.filter((stock) => ["Strong Buy", "Buy"].includes(stock.decision)).length, detail: "Action list", icon: Sparkles },
       { label: "Avg. Margin", value: formatPercent(averageMargin), detail: safetyLabel(averageMargin), icon: ShieldAlert },
       { label: "Highest Upside", value: bestUpside ? `${bestUpside.ticker} ${formatPercent(upsideToBullish(bestUpside))}` : "-", detail: "Bull case", icon: LineChart },
-      { label: "Last Updated", value: lastUpdated ? formatDate(lastUpdated.lastUpdated) : "-", detail: "Latest memo", icon: BookOpen }
+      {
+        label: "Prices Updated",
+        value: lastPriceUpdated ? formatDate(lastPriceUpdated.priceUpdatedAt) : "-",
+        detail: "Yahoo / close",
+        icon: BookOpen
+      }
     ];
   }, [stocks]);
+
+  const refreshPrices = useCallback(
+    async (silent = false) => {
+      if (stocks.length === 0 || isRefreshingPrices) return;
+      setIsRefreshingPrices(true);
+      if (!silent) setPriceRefreshMessage("Updating market prices...");
+
+      const results = await Promise.allSettled(
+        stocks.map(async (stock) => ({
+          id: stock.id,
+          marketPrice: await fetchLatestMarketPrice(stock.ticker)
+        }))
+      );
+
+      const updates = new Map<string, { price: number; asOf: string; label: string }>();
+      const failed: string[] = [];
+
+      results.forEach((result, index) => {
+        if (result.status === "fulfilled") {
+          updates.set(result.value.id, {
+            price: result.value.marketPrice.price,
+            asOf: result.value.marketPrice.asOf,
+            label: result.value.marketPrice.label
+          });
+        } else {
+          failed.push(stocks[index]?.ticker ?? "Unknown");
+        }
+      });
+
+      if (updates.size > 0) {
+        setStocks((current) =>
+          current.map((stock) => {
+            const update = updates.get(stock.id);
+            return update
+              ? {
+                  ...stock,
+                  lastPrice: Number(update.price.toFixed(2)),
+                  priceUpdatedAt: update.asOf
+                }
+              : stock;
+          })
+        );
+      }
+
+      const statusText =
+        updates.size === stocks.length
+          ? "Prices updated from latest market data."
+          : updates.size > 0
+            ? `Updated ${updates.size}; ${failed.join(", ")} failed.`
+            : "Could not update prices. Try again later.";
+
+      setPriceRefreshMessage(statusText);
+      setIsRefreshingPrices(false);
+    },
+    [isRefreshingPrices, stocks]
+  );
+
+  useEffect(() => {
+    if (stocks.some((stock) => isPriceStale(stock.priceUpdatedAt))) {
+      void refreshPrices(true);
+    }
+    // Run only on first load so refreshing prices does not loop.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const upsertStock = (stock: Stock) => {
     const now = new Date().toISOString().slice(0, 10);
@@ -215,11 +289,23 @@ export function App() {
                 Investment Library
               </h1>
             </div>
-            <button className="primary-button shrink-0" onClick={() => setEditingStock(emptyStock())}>
-              <Plus size={19} />
-              <span className="hidden sm:inline">Add Stock</span>
-            </button>
+            <div className="flex shrink-0 gap-2">
+              <button
+                className="icon-button"
+                disabled={isRefreshingPrices}
+                onClick={() => void refreshPrices(false)}
+                title="Update prices"
+              >
+                <RefreshCw className={isRefreshingPrices ? "animate-spin" : ""} size={18} />
+                <span className="hidden sm:inline">Update Prices</span>
+              </button>
+              <button className="primary-button" onClick={() => setEditingStock(emptyStock())}>
+                <Plus size={19} />
+                <span className="hidden sm:inline">Add Stock</span>
+              </button>
+            </div>
           </div>
+          <p className="mt-3 text-xs text-slate-500">{priceRefreshMessage}</p>
         </header>
 
         <section className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-6">
@@ -376,6 +462,7 @@ function StockCard({ stock, active, onSelect }: { stock: Stock; active: boolean;
         <MiniStat label="Intrinsic" value={formatCurrency(stock.morningstarFairValue)} />
         <MiniStat label="Margin" value={formatPercent(margin)} tone={margin >= 0 ? "green" : "red"} />
       </div>
+      <p className="mt-3 text-xs text-slate-500">Price updated {formatPriceUpdated(stock.priceUpdatedAt)}</p>
       <div className="mt-4 flex flex-wrap gap-2">
         <DecisionBadge margin={margin} />
         <Badge className={decisionClass(stock.decision)}>{stock.decision}</Badge>
@@ -402,10 +489,10 @@ function DesktopTable({
         <p className="text-sm text-slate-500">Expanded table for desktop review</p>
       </div>
       <div className="overflow-x-auto">
-        <table className="w-full min-w-[1340px] border-collapse text-left text-sm">
+        <table className="w-full min-w-[1420px] border-collapse text-left text-sm">
           <thead>
             <tr className="border-b border-white/10 text-[11px] uppercase tracking-[0.12em] text-slate-500">
-              {["Ticker", "Company", "Owned", "Current Price", "Intrinsic Value", "Source", "Margin", "Bear", "Neutral", "Bull", "Upside", "Decision", "Conviction", "Risk", "Last Updated"].map((header) => (
+              {["Ticker", "Company", "Owned", "Current Price", "Price Updated", "Intrinsic Value", "Source", "Margin", "Bear", "Neutral", "Bull", "Upside", "Decision", "Conviction", "Risk", "Last Updated"].map((header) => (
                 <th className="px-4 py-3 font-medium" key={header}>{header}</th>
               ))}
             </tr>
@@ -423,6 +510,7 @@ function DesktopTable({
                   <td className="px-4 py-4 text-slate-300">{stock.companyName}</td>
                   <td className="px-4 py-4">{stock.owned ? <Badge className="owned">Yes</Badge> : "No"}</td>
                   <td className="px-4 py-4 font-mono">{formatCurrency(stock.lastPrice)}</td>
+                  <td className="px-4 py-4 text-slate-400">{formatPriceUpdated(stock.priceUpdatedAt)}</td>
                   <td className="px-4 py-4 font-mono">{formatCurrency(stock.morningstarFairValue)}</td>
                   <td className="px-4 py-4 text-slate-400">{stock.valuationSource}</td>
                   <td className="px-4 py-4"><DecisionBadge margin={margin} /></td>
@@ -478,7 +566,11 @@ function StockDetail({ stock, onEdit, onDelete }: { stock: Stock; onEdit: () => 
         </div>
 
         <div className="mt-5 grid grid-cols-2 gap-3">
-          <HeroStat label="Current Price" value={formatCurrency(stock.lastPrice)} />
+          <HeroStat
+            label="Current Price"
+            value={formatCurrency(stock.lastPrice)}
+            meta={`Yahoo / ${formatPriceUpdated(stock.priceUpdatedAt)}`}
+          />
           <HeroStat label="Intrinsic Value" value={formatCurrency(stock.morningstarFairValue)} meta={stock.valuationSource} />
           <HeroStat label="Margin of Safety" value={formatPercent(margin)} tone={margin >= 0 ? "green" : "red"} />
           <HeroStat label="Upside" value={formatPercent(upside)} tone={upside >= 0 ? "green" : "red"} />
@@ -544,7 +636,7 @@ function StockDetail({ stock, onEdit, onDelete }: { stock: Stock; onEdit: () => 
           )}
         </div>
         <p className="mt-5 border-t border-white/10 pt-4 text-sm text-slate-500">
-          Last updated {formatDate(stock.lastUpdated)}
+          Memo updated {formatDate(stock.lastUpdated)} / Price updated {formatPriceUpdated(stock.priceUpdatedAt)}
         </p>
       </section>
     </article>
@@ -759,6 +851,23 @@ function maxBy<T>(items: T[], getter: (item: T) => number) {
 
 function clamp(value: number, min: number, max: number) {
   return Math.min(max, Math.max(min, value));
+}
+
+function isPriceStale(priceUpdatedAt: string) {
+  const updatedAt = new Date(priceUpdatedAt).getTime();
+  if (!Number.isFinite(updatedAt)) return true;
+  return Date.now() - updatedAt > 12 * 60 * 60 * 1000;
+}
+
+function formatPriceUpdated(priceUpdatedAt: string) {
+  const updatedAt = new Date(priceUpdatedAt);
+  if (Number.isNaN(updatedAt.getTime())) return "not updated";
+  return new Intl.DateTimeFormat("en-US", {
+    month: "short",
+    day: "numeric",
+    hour: "numeric",
+    minute: "2-digit"
+  }).format(updatedAt);
 }
 
 function safetyLabel(margin: number) {

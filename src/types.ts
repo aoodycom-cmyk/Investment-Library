@@ -29,6 +29,7 @@ export interface Stock {
   industry: string;
   owned: boolean;
   lastPrice: number;
+  priceUpdatedAt: string;
   morningstarFairValue: number;
   valuationSource: ValuationSource;
   bearPrice: number;
