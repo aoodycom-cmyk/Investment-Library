@@ -128,7 +128,7 @@ export function App() {
           (filters.owned === "All" ||
             (filters.owned === "Owned" && stock.owned) ||
             (filters.owned === "Not Owned" && !stock.owned)) &&
-          (filters.decision === "All" || stock.decision === filters.decision) &&
+          (filters.decision === "All" || computeDecision(stock) === filters.decision) &&
           (filters.risk === "All" || stock.risk === filters.risk) &&
           (filters.conviction === "All" || stock.conviction === filters.conviction) &&
           (filters.sector === "All" || stock.sector === filters.sector) &&
@@ -157,15 +157,52 @@ export function App() {
         : stocks.reduce((total, stock) => total + marginToFairValue(stock), 0) / stocks.length;
 
     return [
-      { label: "Total Stocks", value: stocks.length, detail: "Reference library", icon: BarChart3 },
-      { label: "Owned Stocks", value: stocks.filter((stock) => stock.owned).length, detail: "Current holdings", icon: CheckCircle2 },
-      { label: "Buy Candidates", value: stocks.filter((stock) => ["Strong Buy", "Buy"].includes(stock.decision)).length, detail: "Action list", icon: Sparkles },
-      { label: "Avg. Margin", value: formatPercent(averageMargin), detail: safetyLabel(averageMargin), icon: ShieldAlert },
-      { label: "Highest Upside", value: bestUpside ? `${bestUpside.ticker} ${formatPercent(upsideToBullish(bestUpside))}` : "-", detail: "Bull case", icon: LineChart },
+      {
+        label: "Total Stocks",
+        labelAr: "إجمالي الأسهم",
+        value: stocks.length,
+        detail: "Reference library",
+        detailAr: "مكتبة المتابعة",
+        icon: BarChart3
+      },
+      {
+        label: "Owned Stocks",
+        labelAr: "الأسهم المملوكة",
+        value: stocks.filter((stock) => stock.owned).length,
+        detail: "Current holdings",
+        detailAr: "المراكز الحالية",
+        icon: CheckCircle2
+      },
+      {
+        label: "Buy Candidates",
+        labelAr: "فرص شراء",
+        value: stocks.filter((stock) => ["Strong Buy", "Buy"].includes(computeDecision(stock))).length,
+        detail: "Action list",
+        detailAr: "قائمة القرار",
+        icon: Sparkles
+      },
+      {
+        label: "Avg. Margin",
+        labelAr: "متوسط هامش الأمان",
+        value: formatPercent(averageMargin),
+        detail: safetyLabel(averageMargin),
+        detailAr: safetyLabelAr(averageMargin),
+        icon: ShieldAlert
+      },
+      {
+        label: "Highest Upside",
+        labelAr: "أعلى عائد محتمل",
+        value: bestUpside ? `${bestUpside.ticker} ${formatPercent(upsideToBullish(bestUpside))}` : "-",
+        detail: "Bull case",
+        detailAr: "السيناريو المتفائل",
+        icon: LineChart
+      },
       {
         label: "Prices Updated",
+        labelAr: "تحديث الأسعار",
         value: lastPriceUpdated ? formatDate(lastPriceUpdated.priceUpdatedAt) : "-",
         detail: "Yahoo / close",
+        detailAr: "آخر إغلاق",
         icon: BookOpen
       }
     ];
@@ -207,7 +244,8 @@ export function App() {
               ? {
                   ...stock,
                   lastPrice: Number(update.price.toFixed(2)),
-                  priceUpdatedAt: update.asOf
+                  priceUpdatedAt: update.asOf,
+                  decision: computeDecision({ ...stock, lastPrice: update.price })
                 }
               : stock;
           })
@@ -256,6 +294,7 @@ export function App() {
       companyName: stock.companyName.trim(),
       sector: stock.sector.trim() || "Unclassified",
       industry: stock.industry.trim() || "Unclassified",
+      decision: computeDecision(stock),
       journal,
       lastUpdated: now
     };
@@ -312,13 +351,12 @@ export function App() {
           {kpis.map((kpi) => (
             <div className="kpi-card" key={kpi.label}>
               <div className="flex items-center justify-between gap-3">
-                <p className="text-[10px] font-semibold uppercase tracking-[0.15em] text-slate-500">
-                  {kpi.label}
-                </p>
+                <BilingualLabel label={kpi.label} labelAr={kpi.labelAr} />
                 <kpi.icon className="text-slate-500" size={17} />
               </div>
               <p className="mt-3 truncate text-xl font-semibold text-white">{kpi.value}</p>
               <p className="mt-1 truncate text-xs text-slate-500">{kpi.detail}</p>
+              <p className="mt-0.5 truncate text-[11px] text-slate-600" dir="rtl">{kpi.detailAr}</p>
             </div>
           ))}
         </section>
@@ -458,14 +496,14 @@ function StockCard({ stock, active, onSelect }: { stock: Stock; active: boolean;
         <ChevronRight className="mt-1 text-slate-500" size={20} />
       </div>
       <div className="mt-5 grid grid-cols-3 gap-3">
-        <MiniStat label="Price" value={formatCurrency(stock.lastPrice)} />
-        <MiniStat label="Intrinsic" value={formatCurrency(stock.morningstarFairValue)} />
-        <MiniStat label="Margin" value={formatPercent(margin)} tone={margin >= 0 ? "green" : "red"} />
+        <MiniStat label="Price" labelAr="السعر" value={formatCurrency(stock.lastPrice)} />
+        <MiniStat label="Intrinsic" labelAr="القيمة" value={formatCurrency(stock.morningstarFairValue)} />
+        <MiniStat label="Margin" labelAr="الهامش" value={formatPercent(margin)} tone={margin >= 0 ? "green" : "red"} />
       </div>
       <p className="mt-3 text-xs text-slate-500">Price updated {formatPriceUpdated(stock.priceUpdatedAt)}</p>
       <div className="mt-4 flex flex-wrap gap-2">
         <DecisionBadge margin={margin} />
-        <Badge className={decisionClass(stock.decision)}>{stock.decision}</Badge>
+        <Badge className={decisionClass(computeDecision(stock))}>{computeDecision(stock)}</Badge>
         <Badge className={riskClass(stock.risk)}>{stock.risk} Risk</Badge>
         <Badge className={convictionClass(stock.conviction)}>{stock.conviction} Conviction</Badge>
       </div>
@@ -518,7 +556,7 @@ function DesktopTable({
                   <td className="px-4 py-4 font-mono">{formatCurrency(stock.neutralPrice)}</td>
                   <td className="px-4 py-4 font-mono">{formatCurrency(stock.bullishPrice)}</td>
                   <td className="px-4 py-4 font-mono text-emerald-300">{formatPercent(upsideToBullish(stock))}</td>
-                  <td className="px-4 py-4"><Badge className={decisionClass(stock.decision)}>{stock.decision}</Badge></td>
+                  <td className="px-4 py-4"><Badge className={decisionClass(computeDecision(stock))}>{computeDecision(stock)}</Badge></td>
                   <td className="px-4 py-4"><Badge className={convictionClass(stock.conviction)}>{stock.conviction}</Badge></td>
                   <td className="px-4 py-4"><Badge className={riskClass(stock.risk)}>{stock.risk}</Badge></td>
                   <td className="px-4 py-4 text-slate-400">{formatDate(stock.lastUpdated)}</td>
@@ -560,7 +598,7 @@ function StockDetail({ stock, onEdit, onDelete }: { stock: Stock; onEdit: () => 
         </div>
 
         <div className="mt-5 flex flex-wrap gap-2">
-          <Badge className={decisionClass(stock.decision)}>{stock.decision}</Badge>
+          <Badge className={decisionClass(computeDecision(stock))}>{computeDecision(stock)}</Badge>
           <Badge className={convictionClass(stock.conviction)}>{stock.conviction} Conviction</Badge>
           <Badge className={riskClass(stock.risk)}>{stock.risk} Risk</Badge>
         </div>
@@ -568,12 +606,18 @@ function StockDetail({ stock, onEdit, onDelete }: { stock: Stock; onEdit: () => 
         <div className="mt-5 grid grid-cols-2 gap-3">
           <HeroStat
             label="Current Price"
+            labelAr="السعر الحالي"
             value={formatCurrency(stock.lastPrice)}
             meta={`Yahoo / ${formatPriceUpdated(stock.priceUpdatedAt)}`}
           />
-          <HeroStat label="Intrinsic Value" value={formatCurrency(stock.morningstarFairValue)} meta={stock.valuationSource} />
-          <HeroStat label="Margin of Safety" value={formatPercent(margin)} tone={margin >= 0 ? "green" : "red"} />
-          <HeroStat label="Upside" value={formatPercent(upside)} tone={upside >= 0 ? "green" : "red"} />
+          <HeroStat
+            label="Intrinsic Value"
+            labelAr="القيمة العادلة"
+            value={formatCurrency(stock.morningstarFairValue)}
+            meta={stock.valuationSource}
+          />
+          <HeroStat label="Margin of Safety" labelAr="هامش الأمان" value={formatPercent(margin)} tone={margin >= 0 ? "green" : "red"} />
+          <HeroStat label="Upside" labelAr="العائد المحتمل" value={formatPercent(upside)} tone={upside >= 0 ? "green" : "red"} />
         </div>
       </section>
 
@@ -680,20 +724,21 @@ function StockForm({ stock, onCancel, onSave }: { stock: Stock; onCancel: () => 
               {valuationSources.map((option) => <option key={option}>{option}</option>)}
             </select>
           </Field>
-          <Field label="Decision">
-            <select value={draft.decision} onChange={(event) => setField("decision", event.target.value as Decision)}>
-              {decisions.map((option) => <option key={option}>{option}</option>)}
-            </select>
+          <Field label="Auto Decision">
+            <div className="readonly-decision">
+              <Badge className={decisionClass(computeDecision(draft))}>{computeDecision(draft)}</Badge>
+              <span>Calculated from current price vs fair value</span>
+            </div>
           </Field>
-          <Field label="Stars">
+          <Field label="Morningstar rating">
             <input min="1" max="5" type="number" value={draft.starRating} onChange={(event) => setField("starRating", Number(event.target.value))} />
           </Field>
           {[
             ["Current price", "lastPrice"],
-            ["Intrinsic value", "morningstarFairValue"],
-            ["Bear price", "bearPrice"],
-            ["Neutral price", "neutralPrice"],
-            ["Bull price", "bullishPrice"]
+            ["Morningstar fair value", "morningstarFairValue"],
+            ["Conservative / Bear", "bearPrice"],
+            ["Base / Neutral", "neutralPrice"],
+            ["Optimistic / Bull", "bullishPrice"]
           ].map(([label, key]) => (
             <Field label={label} key={key}>
               <input min="0" step="0.01" type="number" value={draft[key as keyof Stock] as number} onChange={(event) => setField(key as keyof Stock, Number(event.target.value) as never)} />
@@ -786,24 +831,47 @@ function Badge({ children, className }: { children: ReactNode; className: string
   return <span className={`badge ${className}`}>{children}</span>;
 }
 
+function BilingualLabel({ label, labelAr }: { label: string; labelAr: string }) {
+  return (
+    <div>
+      <p className="text-[10px] font-semibold uppercase tracking-[0.15em] text-slate-500">{label}</p>
+      <p className="mt-0.5 text-[11px] font-semibold text-slate-600" dir="rtl">{labelAr}</p>
+    </div>
+  );
+}
+
 function DecisionBadge({ margin }: { margin: number }) {
   return <Badge className={safetyClass(margin)}>{safetyLabel(margin)}</Badge>;
 }
 
-function HeroStat({ label, value, meta, tone }: { label: string; value: string; meta?: string; tone?: "green" | "red" }) {
+function HeroStat({
+  label,
+  labelAr,
+  value,
+  meta,
+  tone
+}: {
+  label: string;
+  labelAr: string;
+  value: string;
+  meta?: string;
+  tone?: "green" | "red";
+}) {
   return (
     <div className="hero-stat">
       <p>{label}</p>
+      <em dir="rtl">{labelAr}</em>
       <strong className={tone === "green" ? "text-emerald-300" : tone === "red" ? "text-red-300" : ""}>{value}</strong>
       {meta && <span>{meta}</span>}
     </div>
   );
 }
 
-function MiniStat({ label, value, tone }: { label: string; value: string; tone?: "green" | "red" }) {
+function MiniStat({ label, labelAr, value, tone }: { label: string; labelAr: string; value: string; tone?: "green" | "red" }) {
   return (
     <div>
       <p className="text-[10px] uppercase tracking-[0.13em] text-slate-500">{label}</p>
+      <p className="mt-0.5 text-[11px] text-slate-600" dir="rtl">{labelAr}</p>
       <p className={`mt-1 font-mono text-sm font-semibold ${tone === "green" ? "text-emerald-300" : tone === "red" ? "text-red-300" : "text-white"}`}>{value}</p>
     </div>
   );
@@ -876,6 +944,23 @@ function safetyLabel(margin: number) {
   if (margin >= 10) return "Watch";
   if (margin >= 0) return "Fair Value";
   return "Overvalued";
+}
+
+function safetyLabelAr(margin: number) {
+  if (margin > 40) return "أقل من القيمة";
+  if (margin >= 20) return "منطقة شراء";
+  if (margin >= 10) return "للمراقبة";
+  if (margin >= 0) return "قيمة عادلة";
+  return "أعلى من القيمة";
+}
+
+function computeDecision(stock: Stock): Decision {
+  const margin = marginToFairValue(stock);
+  if (margin > 40) return "Strong Buy";
+  if (margin >= 20) return "Buy";
+  if (margin >= 10) return "Watch";
+  if (margin >= 0) return "Hold";
+  return stock.owned ? "Trim" : "Avoid";
 }
 
 function safetyClass(margin: number) {

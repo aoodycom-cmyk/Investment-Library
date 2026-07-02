@@ -8,6 +8,9 @@ importers:
 
   .:
     dependencies:
+      '@babel/runtime':
+        specifier: ^7.29.7
+        version: 7.29.7
       '@vitejs/plugin-react':
         specifier: latest
         version: 6.0.3(vite@8.1.2(jiti@1.21.7))

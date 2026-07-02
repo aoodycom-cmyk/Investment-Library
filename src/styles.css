@@ -301,9 +301,17 @@ option {
   color: #64748b;
 }
 
+.hero-stat em {
+  display: block;
+  margin-top: 2px;
+  font-size: 11px;
+  font-style: normal;
+  color: #475569;
+}
+
 .hero-stat strong {
   display: block;
-  margin-top: 10px;
+  margin-top: 8px;
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
   font-size: 20px;
   color: #fff;
@@ -395,6 +403,25 @@ option {
   font-weight: 800;
   letter-spacing: 0.1em;
   text-transform: uppercase;
+}
+
+.readonly-decision {
+  display: flex;
+  min-height: 48px;
+  align-items: center;
+  gap: 10px;
+  border: 1px solid rgba(148, 163, 184, 0.17);
+  border-radius: 10px;
+  background: rgba(12, 19, 32, 0.68);
+  padding: 0 12px;
+}
+
+.readonly-decision span:not(.badge) {
+  color: #64748b;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0;
+  text-transform: none;
 }
 
 @media (min-width: 640px) {
