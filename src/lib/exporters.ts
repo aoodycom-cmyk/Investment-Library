@@ -7,7 +7,7 @@ const csvHeaders = [
   "Company",
   "Owned",
   "Current Price",
-  "Intrinsic Value",
+  "Morningstar Fair Value",
   "Source",
   "Margin to Fair Value %",
   "Bear Case Price",
@@ -54,7 +54,7 @@ export function exportToExcel(stocks: Stock[]) {
     "Company",
     "Owned",
     "Current Price",
-    "Intrinsic Value",
+    "Morningstar Fair Value",
     "Source",
     "Margin",
     "Decision",
@@ -103,7 +103,7 @@ export function exportToPdf(stocks: Stock[]) {
   let y = 96;
   pdf.setFontSize(8);
   pdf.setTextColor(148, 163, 184);
-  ["Ticker", "Owned", "Price", "Intrinsic", "Margin", "Bullish", "Upside", "Decision", "Risk"].forEach(
+  ["Ticker", "Owned", "Price", "Morningstar", "Margin", "Bullish", "Upside", "Decision", "Risk"].forEach(
     (header, index) => pdf.text(header, 40 + index * 84, y)
   );
   y += 18;

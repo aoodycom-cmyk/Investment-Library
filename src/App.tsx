@@ -483,6 +483,7 @@ function Toolbar({
 
 function StockCard({ stock, active, onSelect }: { stock: Stock; active: boolean; onSelect: () => void }) {
   const margin = marginToFairValue(stock);
+  const bullMargin = upsideToBullish(stock);
   return (
     <button className={`stock-card text-left ${active ? "active" : ""}`} onClick={onSelect}>
       <div className="flex items-start justify-between gap-3">
@@ -492,13 +493,18 @@ function StockCard({ stock, active, onSelect }: { stock: Stock; active: boolean;
             {stock.owned && <Badge className="owned">Owned</Badge>}
           </div>
           <p className="mt-1 max-w-[220px] truncate text-sm text-slate-400">{stock.companyName}</p>
+          <StarRating value={stock.starRating} className="mt-2" />
         </div>
         <ChevronRight className="mt-1 text-slate-500" size={20} />
       </div>
-      <div className="mt-5 grid grid-cols-3 gap-3">
+      <div className="mt-5 grid grid-cols-2 gap-3 sm:grid-cols-3">
         <MiniStat label="Price" labelAr="السعر" value={formatCurrency(stock.lastPrice)} />
-        <MiniStat label="Intrinsic" labelAr="القيمة" value={formatCurrency(stock.morningstarFairValue)} />
-        <MiniStat label="Margin" labelAr="الهامش" value={formatPercent(margin)} tone={margin >= 0 ? "green" : "red"} />
+        <MiniStat label="Morningstar" labelAr="مورننق ستار" value={formatCurrency(stock.morningstarFairValue)} />
+        <MiniStat label="Pessimistic" labelAr="متشائم" value={formatCurrency(stock.bearPrice)} />
+        <MiniStat label="Neutral" labelAr="محايد" value={formatCurrency(stock.neutralPrice)} />
+        <MiniStat label="Optimistic" labelAr="متفائل" value={formatCurrency(stock.bullishPrice)} />
+        <MiniStat label="MS Margin" labelAr="هامش مورننق" value={formatPercent(margin)} tone={margin >= 0 ? "green" : "red"} />
+        <MiniStat label="Best Margin" labelAr="هامش المتفائل" value={formatPercent(bullMargin)} tone={bullMargin >= 0 ? "green" : "red"} />
       </div>
       <p className="mt-3 text-xs text-slate-500">Price updated {formatPriceUpdated(stock.priceUpdatedAt)}</p>
       <div className="mt-4 flex flex-wrap gap-2">
@@ -530,7 +536,7 @@ function DesktopTable({
         <table className="w-full min-w-[1420px] border-collapse text-left text-sm">
           <thead>
             <tr className="border-b border-white/10 text-[11px] uppercase tracking-[0.12em] text-slate-500">
-              {["Ticker", "Company", "Owned", "Current Price", "Price Updated", "Intrinsic Value", "Source", "Margin", "Bear", "Neutral", "Bull", "Upside", "Decision", "Conviction", "Risk", "Last Updated"].map((header) => (
+              {["Ticker", "Company", "Owned", "Current Price", "Price Updated", "Morningstar", "Source", "MS Margin", "Bear", "Neutral", "Bull", "Best Margin", "Decision", "Conviction", "Risk", "Last Updated"].map((header) => (
                 <th className="px-4 py-3 font-medium" key={header}>{header}</th>
               ))}
             </tr>
@@ -611,7 +617,7 @@ function StockDetail({ stock, onEdit, onDelete }: { stock: Stock; onEdit: () => 
             meta={`Yahoo / ${formatPriceUpdated(stock.priceUpdatedAt)}`}
           />
           <HeroStat
-            label="Intrinsic Value"
+            label="Morningstar"
             labelAr="القيمة العادلة"
             value={formatCurrency(stock.morningstarFairValue)}
             meta={stock.valuationSource}
@@ -620,6 +626,8 @@ function StockDetail({ stock, onEdit, onDelete }: { stock: Stock; onEdit: () => 
           <HeroStat label="Upside" labelAr="العائد المحتمل" value={formatPercent(upside)} tone={upside >= 0 ? "green" : "red"} />
         </div>
       </section>
+
+      <MorningstarStyleCard stock={stock} />
 
       <section className="glass-panel p-4">
         <div className="flex items-center justify-between">
@@ -842,6 +850,111 @@ function BilingualLabel({ label, labelAr }: { label: string; labelAr: string }) 
 
 function DecisionBadge({ margin }: { margin: number }) {
   return <Badge className={safetyClass(margin)}>{safetyLabel(margin)}</Badge>;
+}
+
+function StarRating({ value, className = "" }: { value: number; className?: string }) {
+  const rating = clamp(Math.round(value), 1, 5);
+  return (
+    <span className={`inline-flex items-center gap-1 ${className}`} aria-label={`${rating} of 5 stars`}>
+      {Array.from({ length: 5 }).map((_, index) => (
+        <Star
+          className={index < rating ? "fill-amber-300 text-amber-300" : "text-slate-700"}
+          key={index}
+          size={14}
+        />
+      ))}
+    </span>
+  );
+}
+
+function MorningstarStyleCard({ stock }: { stock: Stock }) {
+  const margin = marginToFairValue(stock);
+  const min = Math.min(stock.bearPrice, stock.lastPrice);
+  const max = Math.max(stock.bullishPrice, stock.morningstarFairValue, stock.lastPrice);
+  const pricePosition = 100 - ((stock.lastPrice - min) / Math.max(max - min, 1)) * 100;
+  const fairPosition = 100 - ((stock.morningstarFairValue - min) / Math.max(max - min, 1)) * 100;
+  const distanceLabel = margin >= 0 ? "discount" : "premium";
+  const distanceLabelAr = margin >= 0 ? "بخصم" : "بعلاوة";
+
+  return (
+    <section className="morningstar-panel">
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <h3 className="morningstar-title">Price vs Fair Value</h3>
+          <p className="morningstar-subtitle" dir="rtl">السعر مقابل القيمة العادلة</p>
+        </div>
+        <div className="text-right">
+          <Badge className={safetyClass(margin)}>{safetyLabel(margin)}</Badge>
+          <p className="mt-1 text-xs text-slate-500" dir="rtl">{safetyLabelAr(margin)}</p>
+        </div>
+      </div>
+
+      <p className="mt-4 text-sm leading-6 text-slate-300">
+        {stock.ticker} is trading at a {Math.abs(margin).toFixed(0)}% {distanceLabel} to Morningstar fair value.
+      </p>
+      <p className="mt-1 text-sm leading-6 text-slate-500" dir="rtl">
+        {stock.ticker} يتداول {distanceLabelAr} قدرها {Math.abs(margin).toFixed(0)}% مقارنة بقيمة مورننق ستار.
+      </p>
+
+      <div className="mt-5 grid gap-5 md:grid-cols-[1fr_92px_1fr]">
+        <div className="space-y-3">
+          <MorningstarInfo
+            label="Fair Value"
+            labelAr="قيمة مورننق ستار"
+            line="solid"
+            value={formatCurrency(stock.morningstarFairValue)}
+            meta={`Updated ${formatDate(stock.lastUpdated)}`}
+          />
+          <MorningstarInfo
+            label="Price"
+            labelAr="السعر الأخير"
+            line="dotted"
+            value={formatCurrency(stock.lastPrice)}
+            meta={`Price updated ${formatPriceUpdated(stock.priceUpdatedAt)}`}
+          />
+        </div>
+
+        <div className="fair-value-meter" aria-label="Price vs fair value meter">
+          <span className="meter-line fair" style={{ top: `${clamp(fairPosition, 7, 93)}%` }} />
+          <span className="meter-line price" style={{ top: `${clamp(pricePosition, 7, 93)}%` }} />
+        </div>
+
+        <div className="star-ladder">
+          {[1, 2, 3, 4, 5].map((count) => (
+            <div className={count === clamp(Math.round(stock.starRating), 1, 5) ? "active" : ""} key={count}>
+              <StarRating value={count} />
+            </div>
+          ))}
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function MorningstarInfo({
+  label,
+  labelAr,
+  line,
+  value,
+  meta
+}: {
+  label: string;
+  labelAr: string;
+  line: "solid" | "dotted";
+  value: string;
+  meta: string;
+}) {
+  return (
+    <div className="morningstar-info">
+      <p className="morningstar-info-label">
+        <span className={`line-sample ${line}`} />
+        {label}
+      </p>
+      <p className="mt-1 text-xs text-slate-500" dir="rtl">{labelAr}</p>
+      <strong>{value}</strong>
+      <span>{meta}</span>
+    </div>
+  );
 }
 
 function HeroStat({
