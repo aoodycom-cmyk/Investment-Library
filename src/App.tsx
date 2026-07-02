@@ -193,7 +193,7 @@ export function App() {
         label: "Highest Upside",
         labelAr: "أعلى عائد محتمل",
         value: bestUpside ? `${bestUpside.ticker} ${formatPercent(upsideToBullish(bestUpside))}` : "-",
-        detail: "Bull case",
+        detail: "Very optimistic case",
         detailAr: "السيناريو المتفائل",
         icon: LineChart
       },
@@ -495,16 +495,19 @@ function StockCard({ stock, active, onSelect }: { stock: Stock; active: boolean;
           <p className="mt-1 max-w-[220px] truncate text-sm text-slate-400">{stock.companyName}</p>
           <StarRating value={stock.starRating} className="mt-2" />
         </div>
-        <ChevronRight className="mt-1 text-slate-500" size={20} />
+        <div className="flex items-center gap-2">
+          <CompanyLogo ticker={stock.ticker} companyName={stock.companyName} />
+          <ChevronRight className="text-slate-500" size={20} />
+        </div>
       </div>
       <div className="mt-5 grid grid-cols-2 gap-3 sm:grid-cols-3">
         <MiniStat label="Price" labelAr="السعر" value={formatCurrency(stock.lastPrice)} />
         <MiniStat label="Morningstar" labelAr="مورننق ستار" value={formatCurrency(stock.morningstarFairValue)} />
-        <MiniStat label="Pessimistic" labelAr="متشائم" value={formatCurrency(stock.bearPrice)} />
-        <MiniStat label="Neutral" labelAr="محايد" value={formatCurrency(stock.neutralPrice)} />
-        <MiniStat label="Optimistic" labelAr="متفائل" value={formatCurrency(stock.bullishPrice)} />
+        <MiniStat label="Conservative" labelAr="متحفظ" value={formatCurrency(stock.bearPrice)} tone="amber" />
+        <MiniStat label="Optimistic" labelAr="متفائل" value={formatCurrency(stock.neutralPrice)} tone="green" />
+        <MiniStat label="Very Optimistic" labelAr="متفائل جداً" value={formatCurrency(stock.bullishPrice)} tone="blue" />
         <MiniStat label="MS Margin" labelAr="هامش مورننق" value={formatPercent(margin)} tone={margin >= 0 ? "green" : "red"} />
-        <MiniStat label="Best Margin" labelAr="هامش المتفائل" value={formatPercent(bullMargin)} tone={bullMargin >= 0 ? "green" : "red"} />
+        <MiniStat label="Best Margin" labelAr="هامش متفائل جداً" value={formatPercent(bullMargin)} tone={bullMargin >= 0 ? "blue" : "red"} />
       </div>
       <p className="mt-3 text-xs text-slate-500">Price updated {formatPriceUpdated(stock.priceUpdatedAt)}</p>
       <div className="mt-4 flex flex-wrap gap-2">
@@ -536,7 +539,7 @@ function DesktopTable({
         <table className="w-full min-w-[1420px] border-collapse text-left text-sm">
           <thead>
             <tr className="border-b border-white/10 text-[11px] uppercase tracking-[0.12em] text-slate-500">
-              {["Ticker", "Company", "Owned", "Current Price", "Price Updated", "Morningstar", "Source", "MS Margin", "Bear", "Neutral", "Bull", "Best Margin", "Decision", "Conviction", "Risk", "Last Updated"].map((header) => (
+              {["Ticker", "Company", "Owned", "Current Price", "Price Updated", "Morningstar", "Source", "MS Margin", "Conservative", "Optimistic", "Very Optimistic", "Best Margin", "Decision", "Conviction", "Risk", "Last Updated"].map((header) => (
                 <th className="px-4 py-3 font-medium" key={header}>{header}</th>
               ))}
             </tr>
@@ -561,7 +564,7 @@ function DesktopTable({
                   <td className="px-4 py-4 font-mono">{formatCurrency(stock.bearPrice)}</td>
                   <td className="px-4 py-4 font-mono">{formatCurrency(stock.neutralPrice)}</td>
                   <td className="px-4 py-4 font-mono">{formatCurrency(stock.bullishPrice)}</td>
-                  <td className="px-4 py-4 font-mono text-emerald-300">{formatPercent(upsideToBullish(stock))}</td>
+                  <td className="px-4 py-4 font-mono text-cyan-300">{formatPercent(upsideToBullish(stock))}</td>
                   <td className="px-4 py-4"><Badge className={decisionClass(computeDecision(stock))}>{computeDecision(stock)}</Badge></td>
                   <td className="px-4 py-4"><Badge className={convictionClass(stock.conviction)}>{stock.conviction}</Badge></td>
                   <td className="px-4 py-4"><Badge className={riskClass(stock.risk)}>{stock.risk}</Badge></td>
@@ -656,8 +659,8 @@ function StockDetail({ stock, onEdit, onDelete }: { stock: Stock; onEdit: () => 
         <MemoSection title="Competitive Advantage" body={stock.competitiveAdvantage} />
         <MemoSection title="Growth Drivers" body={stock.growthDrivers} />
         <MemoSection title="Key Risks" body={stock.keyRisks} />
-        <MemoSection title="Bear Case" body={stock.bearCase} />
-        <MemoSection title="Bull Case" body={stock.bullCase} />
+        <MemoSection title="Conservative Case" body={stock.bearCase} />
+        <MemoSection title="Very Optimistic Case" body={stock.bullCase} />
         <MemoSection title="Entry Plan" body={stock.entryPlan} />
         <MemoSection title="Review Trigger" body={stock.exitTrigger} />
         <MemoSection title="Notes" body={stock.notes} />
@@ -744,9 +747,9 @@ function StockForm({ stock, onCancel, onSave }: { stock: Stock; onCancel: () => 
           {[
             ["Current price", "lastPrice"],
             ["Morningstar fair value", "morningstarFairValue"],
-            ["Conservative / Bear", "bearPrice"],
-            ["Base / Neutral", "neutralPrice"],
-            ["Optimistic / Bull", "bullishPrice"]
+            ["Conservative / متحفظ", "bearPrice"],
+            ["Optimistic / متفائل", "neutralPrice"],
+            ["Very Optimistic / متفائل جداً", "bullishPrice"]
           ].map(([label, key]) => (
             <Field label={label} key={key}>
               <input min="0" step="0.01" type="number" value={draft[key as keyof Stock] as number} onChange={(event) => setField(key as keyof Stock, Number(event.target.value) as never)} />
@@ -779,8 +782,8 @@ function StockForm({ stock, onCancel, onSave }: { stock: Stock; onCancel: () => 
             ["Competitive Advantage", "competitiveAdvantage"],
             ["Growth Drivers", "growthDrivers"],
             ["Key Risks", "keyRisks"],
-            ["Bear Case", "bearCase"],
-            ["Bull Case", "bullCase"],
+            ["Conservative Case", "bearCase"],
+            ["Very Optimistic Case", "bullCase"],
             ["Entry Plan", "entryPlan"],
             ["Review Trigger", "exitTrigger"],
             ["Notes", "notes"],
@@ -818,10 +821,10 @@ function ValuationBar({ stock }: { stock: Stock }) {
         </span>
       </div>
       <div className="mt-4 grid grid-cols-4 gap-2 text-center">
-        <RangeLabel label="Bear" value={stock.bearPrice} />
-        <RangeLabel label="Neutral" value={stock.neutralPrice} />
+        <RangeLabel label="Conservative" labelAr="متحفظ" value={stock.bearPrice} tone="amber" />
+        <RangeLabel label="Optimistic" labelAr="متفائل" value={stock.neutralPrice} tone="green" />
         <RangeLabel label="Fair Value" value={stock.morningstarFairValue} />
-        <RangeLabel label="Bull" value={stock.bullishPrice} />
+        <RangeLabel label="Very Optimistic" labelAr="متفائل جداً" value={stock.bullishPrice} tone="blue" />
       </div>
     </div>
   );
@@ -850,6 +853,26 @@ function BilingualLabel({ label, labelAr }: { label: string; labelAr: string }) 
 
 function DecisionBadge({ margin }: { margin: number }) {
   return <Badge className={safetyClass(margin)}>{safetyLabel(margin)}</Badge>;
+}
+
+function CompanyLogo({ ticker, companyName }: { ticker: string; companyName: string }) {
+  const [failed, setFailed] = useState(false);
+  const initials = (ticker || companyName || "?").slice(0, 2).toUpperCase();
+
+  if (failed || !ticker) {
+    return <span className="company-logo fallback">{initials}</span>;
+  }
+
+  return (
+    <span className="company-logo">
+      <img
+        alt={`${companyName || ticker} logo`}
+        loading="lazy"
+        onError={() => setFailed(true)}
+        src={`https://financialmodelingprep.com/image-stock/${encodeURIComponent(ticker)}.png`}
+      />
+    </span>
+  );
 }
 
 function StarRating({ value, className = "" }: { value: number; className?: string }) {
@@ -980,20 +1003,51 @@ function HeroStat({
   );
 }
 
-function MiniStat({ label, labelAr, value, tone }: { label: string; labelAr: string; value: string; tone?: "green" | "red" }) {
+function MiniStat({
+  label,
+  labelAr,
+  value,
+  tone
+}: {
+  label: string;
+  labelAr: string;
+  value: string;
+  tone?: "green" | "red" | "amber" | "blue";
+}) {
+  const toneClass =
+    tone === "green"
+      ? "text-emerald-300"
+      : tone === "red"
+        ? "text-red-300"
+        : tone === "amber"
+          ? "text-amber-300"
+          : tone === "blue"
+            ? "text-cyan-300"
+            : "text-white";
   return (
-    <div>
+    <div className={tone ? `mini-stat ${tone}` : "mini-stat"}>
       <p className="text-[10px] uppercase tracking-[0.13em] text-slate-500">{label}</p>
       <p className="mt-0.5 text-[11px] text-slate-600" dir="rtl">{labelAr}</p>
-      <p className={`mt-1 font-mono text-sm font-semibold ${tone === "green" ? "text-emerald-300" : tone === "red" ? "text-red-300" : "text-white"}`}>{value}</p>
+      <p className={`mt-1 font-mono text-sm font-semibold ${toneClass}`}>{value}</p>
     </div>
   );
 }
 
-function RangeLabel({ label, value }: { label: string; value: number }) {
+function RangeLabel({
+  label,
+  labelAr,
+  value,
+  tone
+}: {
+  label: string;
+  labelAr?: string;
+  value: number;
+  tone?: "green" | "amber" | "blue";
+}) {
   return (
-    <div className="rounded-md border border-white/10 bg-white/[0.03] p-2">
+    <div className={`range-label ${tone ?? ""}`}>
       <p className="text-[10px] uppercase tracking-[0.12em] text-slate-500">{label}</p>
+      {labelAr && <p className="mt-0.5 text-[11px] text-slate-600" dir="rtl">{labelAr}</p>}
       <p className="mt-1 font-mono text-sm text-white">{formatCurrency(value)}</p>
     </div>
   );
